@@ -27,7 +27,7 @@ namespace robotstxt_grab
       }
       else if (args.Length == 1 && args[0] == "/index")
       {
-        var idx = new Indexer(5);
+        var idx = new Indexer(40);
         idx.Index();
       }
 

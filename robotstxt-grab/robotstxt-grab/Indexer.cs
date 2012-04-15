@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data.SQLite;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -12,7 +13,7 @@ namespace robotstxt_grab
 {
   internal class Indexer
   {
-    private const int THREADS = 1;
+    private const int THREADS = 20;
     
     private object _lock = new object();
     private int _done;
@@ -23,6 +24,8 @@ namespace robotstxt_grab
     private string _connString;
     private dynamic _results;
     private dynamic _domains;
+    private int _complete;
+    private TimeSpan _totalTime;
 
     public Indexer(int batch)
     {
@@ -62,8 +65,11 @@ namespace robotstxt_grab
 
     private void _Index()
     {
+      string status = string.Empty;
+
       do
       {
+        var sw = Stopwatch.StartNew();
         //get the next item
         var domain = _GetNextItem();
 
@@ -75,16 +81,22 @@ namespace robotstxt_grab
             _results.Results.Insert(Name: domain, Robots: resp.Body, Headers: resp.Headers);
 
             _MarkItemDone(domain);
+            status = "OK";
           }
           catch (Exception ex)
           {
-            Console.WriteLine(ex.ToString());
-            _MarkItemFailed(domain);
+            _MarkItemFailed(domain, ex);
+            status = "FAIL";
           }
         }
 
-        _batch--;
-      } while (_batch > 0);
+        sw.Stop();
+        _totalTime = _totalTime.Add(sw.Elapsed);
+        _complete++;
+
+        Console.WriteLine(string.Format("{0}:\t[Completed: {1} / {2}\tTime: {3}s\tAvg: {4:0}ms]\t{5}", 
+          status, _complete, _batch, sw.ElapsedMilliseconds / 1000, _totalTime.TotalSeconds / _complete, domain));
+      } while (_complete + THREADS < _batch);
 
       _done += 1;
     }
@@ -100,7 +112,11 @@ namespace robotstxt_grab
         if (obj != null)
         {
           ret = obj.Name;
-          _domains.Domains.UpdateByName(Name: ret, Status: 1);
+
+          lock (_lock)
+          {
+            _domains.Domains.UpdateByName(Name: ret, Status: 1);  
+          }
         }
       }
 
@@ -109,14 +125,18 @@ namespace robotstxt_grab
 
     private void _MarkItemDone(string name)
     {
-      _domains.Domains.UpdateByName(Name: name, Status: 2);
-      Console.WriteLine("COMPLETE: " + name);
+      lock (_lock)
+      {
+        _domains.Domains.UpdateByName(Name: name, Status: 2);
+      }
     }
 
-    private void _MarkItemFailed(string name)
+    private void _MarkItemFailed(string name, Exception ex)
     {
-      _domains.Domains.UpdateByName(Name: name, Status: 3);
-      Console.WriteLine("FAILED: " + name);
+      lock (_lock)
+      {
+        _domains.Domains.UpdateByName(Name: name, Status: 3);
+      }
     }
 
     private void _InitDatabase()

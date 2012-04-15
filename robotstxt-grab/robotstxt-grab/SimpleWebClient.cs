@@ -17,6 +17,7 @@ namespace robotstxt_grab
 
       req.Method = "GET";
       req.KeepAlive = false;
+      req.UserAgent = "Mozilla/5.0 (compatible; RTSbot/1.0; +http://adamcaudill.com/rtsbot/)";
 
       var resp = (HttpWebResponse)req.GetResponse();
       var stream = new StreamReader(resp.GetResponseStream(), Encoding.GetEncoding("ISO-8859-1"));
