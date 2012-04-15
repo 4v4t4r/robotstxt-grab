@@ -9,6 +9,26 @@ namespace robotstxt_grab
   {
     static void Main(string[] args)
     {
+      if (args.Length == 2 && args[0] == "/import")
+      {
+        var file = args[1];
+
+        if (System.IO.File.Exists(file))
+        {
+          //create parser and load database
+          var imp = new Importer(file);
+          imp.Import();
+        }
+        else
+        {
+          //nope
+          Console.WriteLine("File specified doesn't exist.");
+        }
+      }
+      else
+      {
+        //no params, so we just run
+      }
     }
   }
 }

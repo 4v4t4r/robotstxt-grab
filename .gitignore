@@ -1,6 +1,7 @@
 _ReSharper*
 bin
 obj
+data
 TestResults
 *.ReSharper.user
 *.csproj.user
