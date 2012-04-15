@@ -25,9 +25,10 @@ namespace robotstxt_grab
           Console.WriteLine("File specified doesn't exist.");
         }
       }
-      else
+      else if (args.Length == 1 && args[0] == "/index")
       {
-        //no params, so we just run
+        var idx = new Indexer(10);
+        idx.Index();
       }
     }
   }
