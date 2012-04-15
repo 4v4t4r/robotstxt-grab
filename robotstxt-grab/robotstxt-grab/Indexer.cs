@@ -94,7 +94,7 @@ namespace robotstxt_grab
         _totalTime = _totalTime.Add(sw.Elapsed);
         _complete++;
 
-        Console.WriteLine(string.Format("{0}:\t[Completed: {1} / {2}\tTime: {3}s\tAvg: {4:0}ms]\t{5}", 
+        Console.WriteLine(string.Format("{0}:\tCompleted: {1} / {2}\tTime: {3}s\tAvg: {4:0}s\t{5}", 
           status, _complete, _batch, sw.ElapsedMilliseconds / 1000, _totalTime.TotalSeconds / _complete, domain));
       } while (_complete + THREADS < _batch);
 
