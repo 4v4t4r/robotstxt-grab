@@ -45,20 +45,19 @@ namespace robotstxt_grab
       _domains = Database.OpenFile(_domainFile);
       _results = Database.OpenFile(_resultFile);
 
-      //for (var i = 0; i < THREADS; i++)
-      //{
-      //  var th = new Thread(_Index);
-      //  th.IsBackground = true;
-      //  th.Name = "_Index_" + th.ManagedThreadId;
-      //  th.Start();
-      //}
+      for (var i = 0; i < THREADS; i++)
+      {
+        var th = new Thread(_Index);
+        th.IsBackground = true;
+        th.Name = "_Index_" + th.ManagedThreadId;
+        th.Start();
+      }
 
-      ////refactor this, nasty, nasty hack
-      //do
-      //{
-      //  Thread.Sleep(100);
-      //} while (_done + 1 < THREADS);
-      _Index();
+      //refactor this, nasty, nasty hack
+      do
+      {
+        Thread.Sleep(100);
+      } while (_done < THREADS);
     }
 
     private void _Index()
@@ -111,11 +110,13 @@ namespace robotstxt_grab
     private void _MarkItemDone(string name)
     {
       _domains.Domains.UpdateByName(Name: name, Status: 2);
+      Console.WriteLine("COMPLETE: " + name);
     }
 
     private void _MarkItemFailed(string name)
     {
       _domains.Domains.UpdateByName(Name: name, Status: 3);
+      Console.WriteLine("FAILED: " + name);
     }
 
     private void _InitDatabase()
@@ -132,6 +133,8 @@ namespace robotstxt_grab
         var cmd = new SQLiteCommand(conn);
 
         cmd.CommandText = "create table results(id integer primary key autoincrement, name text, retrieved timestamp default current_timestamp, robots text, headers text)";
+        cmd.ExecuteNonQuery();
+        cmd.CommandText = "create index idx_domain_name on domains (name)";
         cmd.ExecuteNonQuery();
 
         conn.Close();
