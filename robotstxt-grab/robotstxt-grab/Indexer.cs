@@ -70,7 +70,7 @@ namespace robotstxt_grab
       do
       {
         var sw = Stopwatch.StartNew();
-        //get the next item
+        string errorMessage = null;
         var domain = _GetNextItem();
 
         if (domain != null)
@@ -85,7 +85,8 @@ namespace robotstxt_grab
           }
           catch (Exception ex)
           {
-            _MarkItemFailed(domain, ex);
+            _MarkItemFailed(domain);
+            errorMessage = ex.Message;
             status = "FAIL";
           }
         }
@@ -94,8 +95,15 @@ namespace robotstxt_grab
         _totalTime = _totalTime.Add(sw.Elapsed);
         _complete++;
 
-        Console.WriteLine(string.Format("{0}:\tCompleted: {1} / {2}\tTime: {3}s\tAvg: {4:0}s\t{5}", 
-          status, _complete, _batch, sw.ElapsedMilliseconds / 1000, _totalTime.TotalSeconds / _complete, domain));
+        var message = string.Format("{0}:\tCompleted: {1} / {2}\tTime: {3}s\tAvg: {4:0}s\t{5}",
+          status, _complete, _batch, sw.ElapsedMilliseconds / 1000, _totalTime.TotalSeconds / _complete, domain);
+
+        if (errorMessage != null)
+        {
+          message = string.Format("{0} ({1})", message, errorMessage);
+        }
+
+        Console.WriteLine(message);
       } while (_complete + THREADS < _batch);
 
       _done += 1;
@@ -131,7 +139,7 @@ namespace robotstxt_grab
       }
     }
 
-    private void _MarkItemFailed(string name, Exception ex)
+    private void _MarkItemFailed(string name)
     {
       lock (_lock)
       {
