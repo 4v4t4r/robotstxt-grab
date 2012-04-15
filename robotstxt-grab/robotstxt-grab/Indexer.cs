@@ -13,7 +13,7 @@ namespace robotstxt_grab
 {
   internal class Indexer
   {
-    private const int THREADS = 20;
+    private const int THREADS = 40;
     
     private object _lock = new object();
     private int _done;
@@ -85,8 +85,8 @@ namespace robotstxt_grab
           }
           catch (Exception ex)
           {
-            _MarkItemFailed(domain);
             errorMessage = ex.Message;
+            _MarkItemFailed(domain, errorMessage);
             status = "FAIL";
           }
         }
@@ -139,11 +139,12 @@ namespace robotstxt_grab
       }
     }
 
-    private void _MarkItemFailed(string name)
+    private void _MarkItemFailed(string name, string message)
     {
       lock (_lock)
       {
         _domains.Domains.UpdateByName(Name: name, Status: 3);
+        _results.Errors.Insert(Name: name, Message: message);
       }
     }
 
@@ -163,6 +164,8 @@ namespace robotstxt_grab
         cmd.CommandText = "create table results(id integer primary key autoincrement, name text, retrieved timestamp default current_timestamp, robots text, headers text)";
         cmd.ExecuteNonQuery();
         cmd.CommandText = "create index idx_domain_name on domains (name)";
+        cmd.ExecuteNonQuery();
+        cmd.CommandText = "create table errors(id integer primary key autoincrement, name text, retrieved timestamp default current_timestamp, message text)";
         cmd.ExecuteNonQuery();
 
         conn.Close();
