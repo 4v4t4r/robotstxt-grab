@@ -7,23 +7,24 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading;
-using Simple.Data;
 
 namespace robotstxt_grab
 {
   internal class Indexer
   {
-    private const int THREADS = 40;
-    
+    private const int THREADS = 50;
+
     private object _lock = new object();
+    private object _lockDone = new object();
     private int _done;
     private int _batch;
     private string _dataPath;
     private string _resultFile;
     private string _domainFile;
-    private string _connString;
-    private dynamic _results;
-    private dynamic _domains;
+    private string _resultConnString;
+    private string _domainConnString;
+    private SQLiteConnection _resultsConn;
+    private SQLiteConnection _domainsConn;
     private int _complete;
     private TimeSpan _totalTime;
 
@@ -34,7 +35,8 @@ namespace robotstxt_grab
       _dataPath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Data");
       _resultFile = Path.Combine(_dataPath, "Results.db");
       _domainFile = Path.Combine(_dataPath, "Domains.db");
-      _connString = string.Format("data source=\"{0}\"", _resultFile);
+      _resultConnString = string.Format("data source=\"{0}\"", _resultFile);
+      _domainConnString = string.Format("data source=\"{0}\"", _domainFile);
     }
 
     public void Index()
@@ -45,8 +47,10 @@ namespace robotstxt_grab
         _InitDatabase();
       }
 
-      _domains = Database.OpenFile(_domainFile);
-      _results = Database.OpenFile(_resultFile);
+      _resultsConn = new SQLiteConnection(_resultConnString);
+      _resultsConn.Open();
+      _domainsConn = new SQLiteConnection(_domainConnString);
+      _domainsConn.Open();
 
       for (var i = 0; i < THREADS; i++)
       {
@@ -78,7 +82,20 @@ namespace robotstxt_grab
           try
           {
             var resp = SimpleWebClient.ExecuteGet(domain);
-            _results.Results.Insert(Name: domain, Robots: resp.Body, Headers: resp.Headers);
+
+            using (var cmd = new SQLiteCommand(_resultsConn))
+            {
+              cmd.CommandText = "insert into results (name, robots, headers) values (@name, @robots, @headers)";
+
+              var nmp = new SQLiteParameter("@name") { Value = domain };
+              cmd.Parameters.Add(nmp);
+              var rbp = new SQLiteParameter("@robots") { Value = resp.Body };
+              cmd.Parameters.Add(rbp);
+              var hdp = new SQLiteParameter("@headers") { Value = resp.Headers };
+              cmd.Parameters.Add(hdp);
+
+              cmd.ExecuteNonQuery();
+            }
 
             _MarkItemDone(domain);
             status = "OK";
@@ -111,20 +128,19 @@ namespace robotstxt_grab
 
     private string _GetNextItem()
     {
-      string ret = null;
+      string ret;
 
       lock (_lock)
       {
-        var obj = _domains.Domains.FindByStatus(Status: 0);
-
-        if (obj != null)
+        using (var cmd = new SQLiteCommand(_domainsConn))
         {
-          ret = obj.Name;
+          cmd.CommandText = "select name from domains where status = 0";
+          ret = cmd.ExecuteScalar().ToString();
+        }
 
-          lock (_lock)
-          {
-            _domains.Domains.UpdateByName(Name: ret, Status: 1);  
-          }
+        if (!string.IsNullOrEmpty(ret))
+        {
+          _UpdateStatus(ret, 1);
         }
       }
 
@@ -133,18 +149,38 @@ namespace robotstxt_grab
 
     private void _MarkItemDone(string name)
     {
-      lock (_lock)
-      {
-        _domains.Domains.UpdateByName(Name: name, Status: 2);
-      }
+      _UpdateStatus(name, 2);
     }
 
     private void _MarkItemFailed(string name, string message)
     {
-      lock (_lock)
+      _UpdateStatus(name, 3);
+
+      using (var cmd = new SQLiteCommand(_resultsConn))
       {
-        _domains.Domains.UpdateByName(Name: name, Status: 3);
-        _results.Errors.Insert(Name: name, Message: message);
+        cmd.CommandText = "insert into errors (name, message) values (@name, @message)";
+
+        var nmp = new SQLiteParameter("@name") { Value = name };
+        cmd.Parameters.Add(nmp);
+        var stp = new SQLiteParameter("@message") { Value = message };
+        cmd.Parameters.Add(stp);
+
+        cmd.ExecuteNonQuery();
+      }
+    }
+
+    private void _UpdateStatus(string name, int status)
+    {
+      using (var cmd = new SQLiteCommand(_domainsConn))
+      {
+        cmd.CommandText = "update domains set status = @status where name = @name";
+
+        var stp = new SQLiteParameter("@status") {Value = status};
+        cmd.Parameters.Add(stp);
+        var nmp = new SQLiteParameter("@name") {Value = name};
+        cmd.Parameters.Add(nmp);
+
+        cmd.ExecuteNonQuery();
       }
     }
 
@@ -156,7 +192,7 @@ namespace robotstxt_grab
       }
 
       SQLiteConnection.CreateFile(_resultFile);
-      using (var conn = new SQLiteConnection(_connString))
+      using (var conn = new SQLiteConnection(_resultConnString))
       {
         conn.Open();
         var cmd = new SQLiteCommand(conn);
@@ -164,6 +200,8 @@ namespace robotstxt_grab
         cmd.CommandText = "create table results(id integer primary key autoincrement, name text, retrieved timestamp default current_timestamp, robots text, headers text)";
         cmd.ExecuteNonQuery();
         cmd.CommandText = "create index idx_domain_name on domains (name)";
+        cmd.ExecuteNonQuery();
+        cmd.CommandText = "create index idx_domain_status on domains (status)";
         cmd.ExecuteNonQuery();
         cmd.CommandText = "create table errors(id integer primary key autoincrement, name text, retrieved timestamp default current_timestamp, message text)";
         cmd.ExecuteNonQuery();
