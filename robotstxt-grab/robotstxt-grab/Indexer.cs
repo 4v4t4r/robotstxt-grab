@@ -15,7 +15,7 @@ namespace robotstxt_grab
     private const int THREADS = 50;
 
     private object _lock = new object();
-    private object _lockDone = new object();
+    private object _lockUpdate = new object();
     private int _done;
     private int _batch;
     private string _dataPath;
@@ -107,6 +107,11 @@ namespace robotstxt_grab
             status = "FAIL";
           }
         }
+        else
+        {
+          //we don't have a domain, so we're probably at the end
+          break;
+        }
 
         sw.Stop();
         _totalTime = _totalTime.Add(sw.Elapsed);
@@ -128,14 +133,19 @@ namespace robotstxt_grab
 
     private string _GetNextItem()
     {
-      string ret;
+      string ret = null;
 
       lock (_lock)
       {
         using (var cmd = new SQLiteCommand(_domainsConn))
         {
           cmd.CommandText = "select name from domains where status = 0";
-          ret = cmd.ExecuteScalar().ToString();
+
+          var val = cmd.ExecuteScalar();
+          if (val != null)
+          {
+            ret = val.ToString();
+          }
         }
 
         if (!string.IsNullOrEmpty(ret))
@@ -177,7 +187,7 @@ namespace robotstxt_grab
 
         var stp = new SQLiteParameter("@status") {Value = status};
         cmd.Parameters.Add(stp);
-        var nmp = new SQLiteParameter("@name") {Value = name};
+        var nmp = new SQLiteParameter("@name") { Value = name };
         cmd.Parameters.Add(nmp);
 
         cmd.ExecuteNonQuery();
@@ -198,10 +208,6 @@ namespace robotstxt_grab
         var cmd = new SQLiteCommand(conn);
 
         cmd.CommandText = "create table results(id integer primary key autoincrement, name text, retrieved timestamp default current_timestamp, robots text, headers text)";
-        cmd.ExecuteNonQuery();
-        cmd.CommandText = "create index idx_domain_name on domains (name)";
-        cmd.ExecuteNonQuery();
-        cmd.CommandText = "create index idx_domain_status on domains (status)";
         cmd.ExecuteNonQuery();
         cmd.CommandText = "create table errors(id integer primary key autoincrement, name text, retrieved timestamp default current_timestamp, message text)";
         cmd.ExecuteNonQuery();

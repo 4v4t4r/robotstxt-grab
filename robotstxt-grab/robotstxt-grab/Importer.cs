@@ -41,23 +41,25 @@ namespace robotstxt_grab
       using (var conn = new SQLiteConnection(_connString))
       {
         conn.Open();
-        var cmd = new SQLiteCommand(conn);
         
         do
         {
-          using (var trans = conn.BeginTransaction())
+          using (var cmd = new SQLiteCommand(conn))
           {
-            cmd.CommandText = "insert into domains (name) values(?)";
-            var param = cmd.CreateParameter();
-            cmd.Parameters.Add(param);
-
-            foreach (var itm in data)
+            using (var trans = conn.BeginTransaction())
             {
-              param.Value = itm;
-              cmd.ExecuteNonQuery();
-            }
+              cmd.CommandText = "insert into domains (name) values(?)";
+              var param = cmd.CreateParameter();
+              cmd.Parameters.Add(param);
 
-            trans.Commit();
+              foreach (var itm in data)
+              {
+                param.Value = itm;
+                cmd.ExecuteNonQuery();
+              }
+
+              trans.Commit();
+            }
           }
 
           count += data.Count();
@@ -104,6 +106,10 @@ namespace robotstxt_grab
         var cmd = new SQLiteCommand(conn);
 
         cmd.CommandText = "create table domains(id integer primary key autoincrement, name text, status int default 0)";
+        cmd.ExecuteNonQuery();
+        cmd.CommandText = "create unique index idx_domain_name on domains (name)";
+        cmd.ExecuteNonQuery();
+        cmd.CommandText = "create index idx_domain_status on domains (status)";
         cmd.ExecuteNonQuery();
 
         conn.Close();
